@@ -1,0 +1,64 @@
+name: Weekly IPO S-1 Alert
+
+on:
+  # Every Monday at 6:00 AM PST = 14:00 UTC
+  schedule:
+    - cron: '0 14 * * 1'
+
+  # Allow manual trigger from the Actions tab (useful for testing)
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Run in test mode (3 recent filings)?'
+        required: false
+        default: 'false'
+        type: boolean
+
+permissions:
+  contents: write   # needed to commit the updated SQLite DB back to the repo
+
+jobs:
+  send-alert:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run IPO alert
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          GMAIL_USER: "alexanderasbury@gmail.com"
+          RECIPIENT_EMAIL: "alexanderasbury@gmail.com"
+          DB_PATH: "ipo_filings.db"
+        run: |
+          if [ "${{ github.event.inputs.test_mode }}" = "true" ]; then
+            python main.py --test
+          else
+            python main.py
+          fi
+
+      # Persist the SQLite database so history accumulates between weekly runs
+      - name: Commit updated database
+        run: |
+          git config user.name  "IPO Alert Bot"
+          git config user.email "actions@github.com"
+          git add ipo_filings.db || true
+          git diff --staged --quiet || git commit -m "chore: update IPO filings DB [skip ci]"
+          git push
