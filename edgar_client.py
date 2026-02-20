@@ -38,6 +38,7 @@ def get_s1_filings(start_date: str, end_date: str) -> list[dict]:
     }
 
     filings = []
+    seen_accessions: set[str] = set()
     batch_size = 40
 
     while True:
@@ -57,7 +58,7 @@ def get_s1_filings(start_date: str, end_date: str) -> list[dict]:
 
         for hit in hits:
             source = hit.get("_source", {})
-            form_type = source.get("form_type", "")
+            form_type = source.get("form", "")
 
             # Only original S-1s, not amendments (S-1/A)
             if form_type != "S-1":
@@ -68,10 +69,20 @@ def get_s1_filings(start_date: str, end_date: str) -> list[dict]:
             # Strip leading zeros for URL usage
             cik = str(int(raw_cik)) if raw_cik.isdigit() else raw_cik
 
+            # display_names format: "Company Name  (TICKER)  (CIK 0001234567)"
+            display_names = source.get("display_names", [])
+            raw_name = display_names[0] if display_names else "Unknown"
+            company_name = raw_name.split("(")[0].strip() if "(" in raw_name else raw_name
+
+            accession_number = source.get("adsh", "")
+            if accession_number in seen_accessions:
+                continue
+            seen_accessions.add(accession_number)
+
             filings.append({
-                "company_name": source.get("entity_name", "Unknown"),
+                "company_name": company_name,
                 "filing_date": source.get("file_date", ""),
-                "accession_number": hit.get("_id", ""),
+                "accession_number": accession_number,
                 "cik": cik,
             })
 
