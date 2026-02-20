@@ -110,27 +110,32 @@ def get_filing_document(cik: str, accession_number: str) -> Optional[str]:
     """
     accession_no_dashes = accession_number.replace("-", "")
 
-    # Fetch the filing index JSON
-    index_url = (
-        f"{EDGAR_ARCHIVES_URL}/{cik}/{accession_no_dashes}"
-        f"/{accession_number}-index.json"
-    )
+    # Use data.sec.gov submissions API to get the primary document filename
+    cik_padded = cik.zfill(10)
+    submissions_url = f"https://data.sec.gov/submissions/CIK{cik_padded}.json"
 
     try:
         time.sleep(0.3)
-        resp = requests.get(index_url, headers=HEADERS, timeout=30)
+        resp = requests.get(submissions_url, headers=HEADERS, timeout=30)
         resp.raise_for_status()
-        index_data = resp.json()
+        submissions = resp.json()
     except Exception as e:
-        print(f"  [EDGAR] Could not fetch filing index for {accession_number}: {e}")
+        print(f"  [EDGAR] Could not fetch submissions for CIK {cik}: {e}")
         return None
 
-    # Find the primary S-1 HTML document
-    files = index_data.get("directory", {}).get("item", [])
-    doc_url = _find_primary_document(cik, accession_no_dashes, files)
+    recent = submissions.get("filings", {}).get("recent", {})
+    accession_list = recent.get("accessionNumber", [])
+    try:
+        idx = accession_list.index(accession_number)
+    except ValueError:
+        print(f"  [EDGAR] Accession {accession_number} not found in submissions for CIK {cik}")
+        return None
 
-    if not doc_url:
-        print(f"  [EDGAR] No HTML document found for {accession_number}")
+    primary_doc = recent.get("primaryDocument", [])[idx]
+    doc_url = f"{EDGAR_ARCHIVES_URL}/{cik}/{accession_no_dashes}/{primary_doc}"
+
+    if not primary_doc:
+        print(f"  [EDGAR] No primary document found for {accession_number}")
         return None
 
     try:
@@ -141,34 +146,3 @@ def get_filing_document(cik: str, accession_number: str) -> Optional[str]:
     except Exception as e:
         print(f"  [EDGAR] Error downloading filing document: {e}")
         return None
-
-
-def _find_primary_document(
-    cik: str, accession_no_dashes: str, files: list[dict]
-) -> Optional[str]:
-    """
-    Pick the best HTML document from a filing's file list.
-    Preference order: typed S-1 .htm > any .htm > any .html
-    """
-    base = f"{EDGAR_ARCHIVES_URL}/{cik}/{accession_no_dashes}"
-
-    # Prefer file explicitly typed as S-1
-    for f in files:
-        if f.get("type") == "S-1":
-            name = f.get("name", "")
-            if name.lower().endswith((".htm", ".html")):
-                return f"{base}/{name}"
-
-    # Fallback: first .htm file
-    for f in files:
-        name = f.get("name", "")
-        if name.lower().endswith(".htm"):
-            return f"{base}/{name}"
-
-    # Fallback: first .html file
-    for f in files:
-        name = f.get("name", "")
-        if name.lower().endswith(".html"):
-            return f"{base}/{name}"
-
-    return None
