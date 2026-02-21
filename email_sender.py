@@ -10,7 +10,8 @@ from html import escape
 
 GMAIL_USER = os.environ.get("GMAIL_USER", "alexanderasbury@gmail.com")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
-RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL", "alexanderasbury@gmail.com")
+_RECIPIENT_RAW = os.environ.get("RECIPIENT_EMAIL", "alexanderasbury@gmail.com")
+RECIPIENT_EMAILS = [r.strip() for r in _RECIPIENT_RAW.split(",") if r.strip()]
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +157,7 @@ def send_email(
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = GMAIL_USER
-    msg["To"] = RECIPIENT_EMAIL
+    msg["To"] = ", ".join(RECIPIENT_EMAILS)
 
     msg.attach(MIMEText(format_plain_email(filings, week_start, week_end), "plain"))
     msg.attach(MIMEText(format_html_email(filings, week_start, week_end), "html"))
@@ -164,8 +165,8 @@ def send_email(
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-            server.sendmail(GMAIL_USER, RECIPIENT_EMAIL, msg.as_string())
-        print(f"[Email] Sent to {RECIPIENT_EMAIL}: {subject}")
+            server.sendmail(GMAIL_USER, RECIPIENT_EMAILS, msg.as_string())
+        print(f"[Email] Sent to {', '.join(RECIPIENT_EMAILS)}: {subject}")
         return True
     except Exception as e:
         print(f"[Email] Failed to send: {e}")
