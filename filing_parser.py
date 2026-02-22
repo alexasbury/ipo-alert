@@ -180,13 +180,21 @@ def _build_prompt(company_name: str, sections: dict[str, str]) -> str:
 
 Extract the requested fields from the sections below. Return ONLY a valid JSON object matching the schema provided.
 
-Important guidance:
-- **transfer_agent**: Look for "Transfer Agent and Registrar" heading near the top or bottom of the filing.
-- **legal_counsel**: The company's own counsel (not the underwriters' counsel). Often found under "Legal Matters" or on the cover page.
-- **dually_listed**: Focus on share classes being OFFERED or REGISTERED. The share_class_signal below is a hint.
-- **lock_up_date / lock_up_expiration_date**: S-1 filings are pre-IPO, so the lock-up typically starts on the IPO date (TBD). Express expiration as "IPO date + X days" unless you can be more specific.
-- **top_5_percent_shareholders**: Only include 5%+ holders. Note each class they hold if dual-class.
-- **is_venture_backed**: "Yes" if firm names contain keywords like Ventures, Capital Partners, Growth Equity, Fund, etc., or if footnotes tie a large holder to a VC firm.
+=== STRICT RULES ===
+1. Rely ONLY on the text provided below. Do not use outside knowledge, internet searches, or information about events that occurred after the filing date.
+2. S-1s are often preliminary. If a date, price, or term is left blank (e.g., "[ ]", "to be determined", or only a month/year is given), extract exactly what is written or state "Not specified in preliminary filing." Do not guess or estimate.
+3. Do not add conversational filler. Output only the JSON object.
+
+=== FIELD GUIDANCE ===
+- **transfer_agent**: Look in the "Description of Capital Stock" section or the prospectus summary. Also check near the bottom of the filing for a "Transfer Agent and Registrar" heading.
+- **legal_counsel**: The company's own counsel only — NOT the underwriters' counsel. Look on the cover page (legal representatives for the company) or the "Legal Matters" section.
+- **dually_listed**: Look in "Description of Capital Stock" or the prospectus summary. Note voting rights if applicable. The share_class_signal below is a hint. Use: 'Single class', 'Class A only', 'Class A & Class B', or 'Class A, Class B & Class C'.
+- **lock_up_date**: The trigger date for the lock-up (usually the date of the final prospectus). For preliminary S-1s state "The date of the final prospectus."
+- **lock_up_expiration_date**: Calculate or extract the timeframe (e.g., "180 days after the date of the prospectus"). Note any early release conditions. Look in "Shares Eligible for Future Sale" or "Underwriting."
+- **lock_up_terms**: Summarize the core restrictions, who is subject to the lock-up, duration, and notable exceptions or early release triggers.
+- **top_5_percent_shareholders**: Look in the "Principal and Selling Stockholders" table. List any entity or person holding 5%+ prior to the offering, with their pre-offering percentage. Format: "Name (X%); Name (Y%)".
+- **top_5_percent_shareholders_footnotes**: Summarize critical context from the footnotes of the principal shareholders table — particularly super-voting control, irrevocable proxies, and who holds voting/investment power for venture entities.
+- **is_venture_backed**: "Yes" if prominent venture capital firms appear in the principal shareholders table. "No" otherwise.
 
 === COVER PAGE ===
 {sec('cover_page', 2500)}
@@ -200,7 +208,7 @@ Important guidance:
 === LOCK-UP AGREEMENTS ===
 {sec('lock_up', 2500)}
 
-=== BENEFICIAL OWNERSHIP ===
+=== BENEFICIAL OWNERSHIP / PRINCIPAL SHAREHOLDERS ===
 {sec('beneficial_ownership', 4000)}
 
 === SHARE CLASS SIGNAL (automated detection) ===
