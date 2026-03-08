@@ -1,12 +1,16 @@
 """
-Daily IPO Alert — main entry point.
+IPO Alert — main entry point.
 
 Usage:
-    python main.py             # production: process last 2 days + send email
-    python main.py --test      # test: process 3 recent filings + send email
+    python main.py                     # weekly job: catch-up fetch + send previous-week email
+    python main.py --no-email          # daily job: fetch last 2 days, store in DB, no email
+    python main.py --test              # test: process 3 recent filings + send email
     python main.py --test --no-email   # test without sending (writes email_preview.html)
     python main.py --preview-email     # write email_preview.html from DB, no send
-    python main.py --print-db  # dump all stored filings to stdout
+    python main.py --print-db          # dump all stored filings to stdout
+    python main.py --audit-db          # print NULL counts per column
+    python main.py --normalize         # backfill lock_up_days / lock_up_expires_on
+    python main.py --upcoming-lockups  # print lock-ups expiring in the next 30 days
 """
 
 import argparse
@@ -202,29 +206,54 @@ def run_test_mode(send: bool = True) -> None:
         print(f"[Email] Preview written to {preview_path}")
 
 
-def run_weekly_job() -> None:
+def run_daily_job() -> None:
     """
-    Production job: process the last 2 days of filings and send the email.
+    Daily extraction job: fetch the last 2 days of filings and store them.
 
-    The 2-day lookback acts as a safety buffer to catch any filings that
-    arrived late or were missed in the previous run.
+    Called by the daily GitHub Actions workflow via ``python main.py --no-email``.
+    The 2-day lookback acts as a safety buffer so that if a run is delayed or
+    fails, the following day's run recovers any missed filings.
 
-    Fetches upcoming lock-up expirations from the database and includes
-    them in the email.
+    No email is sent — the weekly job handles that separately.
     """
     init_db()
     run_start, run_end = _last_two_days()
-    print(f"[Main] Daily run for {run_start} → {run_end}")
+    print(f"[Main] Daily extraction run for {run_start} → {run_end}")
 
     filings = process_filings_for_range(run_start, run_end)
-    print(f"\n[Main] {len(filings)} filing(s) to include in email.")
+    print(f"\n[Main] {len(filings)} filing(s) processed.")
+    _print_summary(filings)
 
-    # Use get_filings_for_email to pull the full, normalized DB records for
-    # the current date range (includes all columns written by apply_normalization).
-    email_filings = get_filings_for_email(run_start, run_end)
+
+def run_weekly_job() -> None:
+    """
+    Weekly email job: catch-up fetch + send the previous week's email.
+
+    Called by the weekly GitHub Actions workflow via ``python main.py``.
+
+    Steps:
+    1. Run a 2-day catch-up fetch to pick up any filings missed by the
+       last daily run.
+    2. Email all filings from the full previous calendar week (Mon–Sun),
+       pulling complete normalized records from the database.
+    3. Include upcoming lock-up expirations (next 30 days) in the email.
+    """
+    init_db()
+
+    # Step 1: catch-up fetch for any filings missed by the daily job
+    fetch_start, fetch_end = _last_two_days()
+    print(f"[Main] Catch-up fetch for {fetch_start} → {fetch_end}")
+    process_filings_for_range(fetch_start, fetch_end)
+
+    # Step 2: build email from the full previous week stored in the DB
+    week_start, week_end = _previous_week()
+    print(f"[Main] Building weekly email for {week_start} → {week_end}")
+    email_filings = get_filings_for_email(week_start, week_end)
     upcoming_lockups = get_upcoming_lockups(days_ahead=30)
+    print(f"[Main] {len(email_filings)} filing(s) in email, "
+          f"{len(upcoming_lockups)} upcoming lock-up(s).")
 
-    send_email(email_filings, run_start, run_end, upcoming_lockups=upcoming_lockups, test_mode=False)
+    send_email(email_filings, week_start, week_end, upcoming_lockups=upcoming_lockups, test_mode=False)
 
 
 def run_preview_email() -> None:
@@ -372,7 +401,11 @@ def main() -> None:
         run_preview_email()
     elif args.test:
         run_test_mode(send=not args.no_email)
+    elif args.no_email:
+        # Daily job: extract only, no email
+        run_daily_job()
     else:
+        # Weekly job: catch-up fetch + send previous-week email
         run_weekly_job()
 
 

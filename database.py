@@ -60,56 +60,6 @@ def init_db(db_path: str = DB_PATH) -> None:
     conn.close()
 
 
-def filing_exists(accession_number: str, db_path: str = DB_PATH) -> bool:
-    conn = sqlite3.connect(db_path)
-    cur = conn.execute(
-        "SELECT 1 FROM ipo_filings WHERE accession_number = ?", (accession_number,)
-    )
-    exists = cur.fetchone() is not None
-    conn.close()
-    return exists
-
-
-def save_filing(filing_data, db_path: str = DB_PATH) -> bool:
-    """
-    Insert a FilingData (or dict) into the database.
-    Returns True if saved, False if already present.
-    """
-    d = filing_data.to_dict() if hasattr(filing_data, "to_dict") else filing_data
-
-    if filing_exists(d["accession_number"], db_path):
-        return False
-
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        """
-        INSERT OR IGNORE INTO ipo_filings (
-            company_name, filing_date, accession_number, cik,
-            transfer_agent, legal_counsel, dually_listed,
-            lock_up_date, lock_up_expiration_date, lock_up_terms,
-            top_5_percent_shareholders, top_5_percent_shareholders_footnotes,
-            is_venture_backed
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            d["company_name"],
-            d["filing_date"],
-            d["accession_number"],
-            d["cik"],
-            d.get("transfer_agent"),
-            d.get("legal_counsel"),
-            d.get("dually_listed"),
-            d.get("lock_up_date"),
-            d.get("lock_up_expiration_date"),
-            d.get("lock_up_terms"),
-            d.get("top_5_percent_shareholders"),
-            d.get("top_5_percent_shareholders_footnotes"),
-            d.get("is_venture_backed"),
-        ),
-    )
-    conn.commit()
-    conn.close()
-    return True
 
 
 _PRIORITY = {"S-1": 1, "S-1/A": 2, "424B4": 3}
@@ -267,17 +217,6 @@ def get_all_filings(db_path: str = DB_PATH) -> list[dict]:
     return rows
 
 
-def get_filing_by_cik(cik: str, db_path: str = DB_PATH) -> Optional[dict]:
-    """Return the S-1 record for a CIK that has not yet been enriched with a 424B4."""
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    cur = conn.execute(
-        "SELECT * FROM ipo_filings WHERE cik = ? AND prospectus_date IS NULL",
-        (cik,),
-    )
-    row = cur.fetchone()
-    conn.close()
-    return dict(row) if row else None
 
 
 def apply_normalization(accession_number: str, derived: dict, db_path: str = DB_PATH) -> None:
@@ -405,37 +344,3 @@ def get_upcoming_lockups(days_ahead: int = 30, db_path: str = DB_PATH) -> list[d
     return rows
 
 
-def update_filing_from_prospectus(
-    cik: str, prospectus_date: str, data: dict, db_path: str = DB_PATH
-) -> bool:
-    """
-    Update enrichable fields on an existing S-1 record using 424B4 data.
-    Only updates rows where prospectus_date IS NULL (i.e. not yet enriched).
-    Returns True if a row was updated.
-    """
-    conn = sqlite3.connect(db_path)
-    cur = conn.execute(
-        """UPDATE ipo_filings SET
-            transfer_agent=?, legal_counsel=?, dually_listed=?,
-            lock_up_date=?, lock_up_expiration_date=?, lock_up_terms=?,
-            top_5_percent_shareholders=?, top_5_percent_shareholders_footnotes=?,
-            is_venture_backed=?, prospectus_date=?
-           WHERE cik=? AND prospectus_date IS NULL""",
-        (
-            data.get("transfer_agent"),
-            data.get("legal_counsel"),
-            data.get("dually_listed"),
-            data.get("lock_up_date"),
-            data.get("lock_up_expiration_date"),
-            data.get("lock_up_terms"),
-            data.get("top_5_percent_shareholders"),
-            data.get("top_5_percent_shareholders_footnotes"),
-            data.get("is_venture_backed"),
-            prospectus_date,
-            cik,
-        ),
-    )
-    updated = cur.rowcount > 0
-    conn.commit()
-    conn.close()
-    return updated
