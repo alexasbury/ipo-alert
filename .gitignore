@@ -5,3 +5,6 @@ __pycache__/
 .venv/
 venv/
 email_preview.html
+
+# ipo_filings.db is intentionally tracked for persistence between GitHub Actions runs
+!ipo_filings.db
