@@ -16,12 +16,12 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from html import escape
 
-GMAIL_USER = os.environ.get("GMAIL_USER", "alexanderasbury@gmail.com")
+GMAIL_USER = os.environ.get("GMAIL_USER", "")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
 
 # RECIPIENT_EMAIL may be a comma-separated list; split handles both single and
 # multiple addresses transparently.
-_RECIPIENT_RAW = os.environ.get("RECIPIENT_EMAIL", "alexanderasbury@gmail.com")
+_RECIPIENT_RAW = os.environ.get("RECIPIENT_EMAIL", "")
 RECIPIENT_EMAILS = [r.strip() for r in _RECIPIENT_RAW.split(",") if r.strip()]
 
 

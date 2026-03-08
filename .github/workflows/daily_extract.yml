@@ -26,6 +26,7 @@ jobs:
       - name: Run extraction pipeline
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          EDGAR_CONTACT_EMAIL: ${{ secrets.EDGAR_CONTACT_EMAIL }}
         run: python main.py --no-email
 
       - name: Commit updated database
