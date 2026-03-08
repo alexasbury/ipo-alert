@@ -27,6 +27,8 @@ class FilingData:
     top_5_percent_shareholders: str
     top_5_percent_shareholders_footnotes: str
     is_venture_backed: str
+    # The SEC filing type that produced this record: "S-1", "S-1/A", or "424B4"
+    filing_type: str = "S-1"
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -68,14 +70,33 @@ def _extract_sections(html: str) -> dict[str, str]:
 
     sections["transfer_agent"] = _extract_around(
         text,
-        ["transfer agent and registrar", "transfer agent", "registrar and transfer agent"],
+        [
+            "transfer agent and registrar",
+            "transfer agent and registrar is",
+            "registrar and transfer agent",
+            "registrar and paying agent",
+            "appointed as transfer agent",
+            "serves as our transfer agent",
+            "transfer agent",
+        ],
         before=50,
         after=600,
     )
 
     sections["legal_counsel"] = _extract_around(
         text,
-        ["legal matters", "validity of securities", "legal counsel", "counsel to"],
+        [
+            "legal matters",
+            "validity of securities",
+            "legal counsel",
+            "counsel to",
+            "our counsel",
+            "counsel to the company",
+            "has opined",
+            "has acted as counsel",
+            "pass upon certain legal matters for us",
+            "pass upon legal matters for the company",
+        ],
         before=50,
         after=1000,
     )
@@ -102,7 +123,18 @@ def _extract_sections(html: str) -> dict[str, str]:
     # Dual-class signal
     has_a = any(kw in text.lower() for kw in ["class a common stock", "class a ordinary shares", "class a shares"])
     has_b = any(kw in text.lower() for kw in ["class b common stock", "class b ordinary shares", "class b shares"])
-    has_c = any(kw in text.lower() for kw in ["class c common stock", "class c ordinary shares", "class c shares"])
+    # Require "class c" to be followed by a share-class noun to avoid false
+    # positives from unrelated uses such as "Class C misdemeanor" or legal
+    # references to a different company's share classes.
+    has_c = any(
+        kw in text.lower()
+        for kw in [
+            "class c common stock",
+            "class c ordinary shares",
+            "class c shares",
+            "class c stock",
+        ]
+    )
 
     if has_a and has_b and has_c:
         sections["share_class_signal"] = "CLASS_A_B_C"
@@ -222,7 +254,7 @@ def _call_claude(company_name: str, sections: dict[str, str]) -> dict:
 
     response = client.messages.parse(
         model="claude-opus-4-6",
-        max_tokens=2048,
+        max_tokens=4096,
         thinking={"type": "adaptive"},
         messages=[{"role": "user", "content": prompt}],
         output_format=_build_pydantic_model(),
@@ -286,10 +318,23 @@ def parse_filing(
     accession_number: str,
     cik: str,
     html_content: str,
+    filing_type: str = "S-1",
 ) -> FilingData:
     """
     Full parsing pipeline: extract sections from HTML, then use Claude to
     pull out structured fields.
+
+    Args:
+        company_name:     Legal company name as it appears in the EDGAR filing.
+        filing_date:      Date the filing was submitted, YYYY-MM-DD.
+        accession_number: EDGAR accession number, e.g. "0001234567-26-000123".
+        cik:              Company CIK (without leading zeros).
+        html_content:     Raw HTML of the primary filing document.
+        filing_type:      SEC form type: "S-1", "S-1/A", or "424B4".
+                          Defaults to "S-1".
+
+    Returns:
+        FilingData dataclass instance with all extracted and identity fields.
     """
     sections = _extract_sections(html_content)
 
@@ -315,4 +360,5 @@ def parse_filing(
             "top_5_percent_shareholders_footnotes", ""
         ),
         is_venture_backed=extracted.get("is_venture_backed", "Unknown"),
+        filing_type=filing_type,
     )
