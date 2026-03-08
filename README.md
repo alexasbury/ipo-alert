@@ -94,6 +94,7 @@ For the automated workflows to run, add the same four variables as secrets in yo
 | Secret name | Value |
 |---|---|
 | `ANTHROPIC_API_KEY` | Your Anthropic API key |
+| `EDGAR_CONTACT_EMAIL` | A valid email you own (required by SEC EDGAR terms of service) |
 | `GMAIL_USER` | Sending Gmail address |
 | `GMAIL_APP_PASSWORD` | Gmail App Password |
 | `RECIPIENT_EMAIL` | Comma-separated recipient list |

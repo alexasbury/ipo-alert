@@ -2,13 +2,23 @@
 SEC EDGAR API client for fetching S-1, S-1/A, and 424B4 filings.
 """
 
+import os
 import time
 import requests
 from typing import Optional
 
-# EDGAR requires a User-Agent header with contact info
+# EDGAR requires a User-Agent header with a valid contact email.
+# Set EDGAR_CONTACT_EMAIL in your environment / .env file.
+_contact_email = os.environ.get("EDGAR_CONTACT_EMAIL", "")
+if not _contact_email:
+    raise EnvironmentError(
+        "EDGAR_CONTACT_EMAIL is not set. "
+        "SEC EDGAR requires a valid contact email in the User-Agent header. "
+        "Add it to your .env file or GitHub Actions secrets."
+    )
+
 HEADERS = {
-    "User-Agent": "IPO Alert alexanderasbury@gmail.com",
+    "User-Agent": f"IPO Alert {_contact_email}",
     "Accept": "application/json",
 }
 
