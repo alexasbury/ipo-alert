@@ -43,6 +43,7 @@ jobs:
       - name: Run IPO alert
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          EDGAR_CONTACT_EMAIL: ${{ secrets.EDGAR_CONTACT_EMAIL }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GMAIL_USER: "alexanderasbury@gmail.com"
           RECIPIENT_EMAIL: "alexanderasbury@gmail.com,trishajeffries@gmail.com"
