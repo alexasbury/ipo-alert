@@ -9,18 +9,20 @@ from typing import Optional
 
 # EDGAR requires a User-Agent header with a valid contact email.
 # Set EDGAR_CONTACT_EMAIL in your environment / .env file.
-_contact_email = os.environ.get("EDGAR_CONTACT_EMAIL", "")
-if not _contact_email:
-    raise EnvironmentError(
-        "EDGAR_CONTACT_EMAIL is not set. "
-        "SEC EDGAR requires a valid contact email in the User-Agent header. "
-        "Add it to your .env file or GitHub Actions secrets."
-    )
-
-HEADERS = {
-    "User-Agent": f"IPO Alert {_contact_email}",
-    "Accept": "application/json",
-}
+# Validation is deferred to first use so that importing this module in tests
+# (where HTTP calls are mocked) does not require the variable to be set.
+def _get_headers() -> dict:
+    contact_email = os.environ.get("EDGAR_CONTACT_EMAIL", "")
+    if not contact_email:
+        raise EnvironmentError(
+            "EDGAR_CONTACT_EMAIL is not set. "
+            "SEC EDGAR requires a valid contact email in the User-Agent header. "
+            "Add it to your .env file or GitHub Actions secrets."
+        )
+    return {
+        "User-Agent": f"IPO Alert {contact_email}",
+        "Accept": "application/json",
+    }
 
 EDGAR_SEARCH_URL = "https://efts.sec.gov/LATEST/search-index"
 EDGAR_ARCHIVES_URL = "https://www.sec.gov/Archives/edgar/data"
@@ -54,7 +56,7 @@ def get_s1_filings(start_date: str, end_date: str) -> list[dict]:
     while True:
         try:
             response = requests.get(
-                EDGAR_SEARCH_URL, params=params, headers=HEADERS, timeout=30
+                EDGAR_SEARCH_URL, params=params, headers=_get_headers(), timeout=30
             )
             response.raise_for_status()
             data = response.json()
@@ -136,7 +138,7 @@ def get_s1a_filings(start_date: str, end_date: str) -> list[dict]:
     while True:
         try:
             response = requests.get(
-                EDGAR_SEARCH_URL, params=params, headers=HEADERS, timeout=30
+                EDGAR_SEARCH_URL, params=params, headers=_get_headers(), timeout=30
             )
             response.raise_for_status()
             data = response.json()
@@ -215,7 +217,7 @@ def get_424b4_filings(start_date: str, end_date: str) -> list[dict]:
     while True:
         try:
             response = requests.get(
-                EDGAR_SEARCH_URL, params=params, headers=HEADERS, timeout=30
+                EDGAR_SEARCH_URL, params=params, headers=_get_headers(), timeout=30
             )
             response.raise_for_status()
             data = response.json()
@@ -281,7 +283,7 @@ def get_filing_document(cik: str, accession_number: str) -> Optional[str]:
 
     try:
         time.sleep(0.3)
-        resp = requests.get(submissions_url, headers=HEADERS, timeout=30)
+        resp = requests.get(submissions_url, headers=_get_headers(), timeout=30)
         resp.raise_for_status()
         submissions = resp.json()
     except Exception as e:
@@ -305,7 +307,7 @@ def get_filing_document(cik: str, accession_number: str) -> Optional[str]:
 
     try:
         time.sleep(0.3)
-        resp = requests.get(doc_url, headers=HEADERS, timeout=90)
+        resp = requests.get(doc_url, headers=_get_headers(), timeout=90)
         resp.raise_for_status()
         return resp.text
     except requests.RequestException as e:
